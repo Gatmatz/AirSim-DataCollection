@@ -16,7 +16,7 @@ cameraTypeMap = {
     "normals": airsim.ImageType.SurfaceNormals
 }
 
-cameraNameMap = ["front_center", "front_right", "front_left", "fpv", "bottom_center" ,"back_center"]
+cameraNameMap = ["front_center", "front_right", "front_left", "fpv", "bottom_center", "back_center"]
 
 # set camera parameters
 cameraType = "scene"
@@ -62,13 +62,13 @@ for i in range(10):
     diff = endTime - startTime
     # capture image
     raw = client.simGetImage(cameraName, cameraTypeMap[cameraType])
-    if raw == None:
+    if raw is None:
         print("Camera is not returning image, please check airsim for error messages")
         sys.exit(0)
     else:
         png = cv2.imdecode(airsim.string_to_uint8_array(raw), cv2.IMREAD_UNCHANGED)
-        img_name = 'Frame:'+str(i) + ' ' 'Time:'+ str("{:.2f}".format(diff))
-        cv2.putText(png, img_name, textOrg, fontFace, fontScale, (0, 255, 0), thickness)
+        img_name = 'Frame:'+str(i) + ' ' 'Time:' + str("{:.2f}".format(diff))
+        cv2.putText(png, img_name, textOrg, fontFace, fontScale, (0, 255, 255), thickness)
         file_name = 'Frame ' + str(i) + '.png'
         cv2.imwrite(os.path.join(directory, file_name), png)
 
