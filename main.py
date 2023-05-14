@@ -1,3 +1,5 @@
+import datetime
+
 import airsim
 import os
 import cv2
@@ -18,18 +20,27 @@ cameraTypeMap = {
 
 cameraNameMap = ["front_center", "front_right", "front_left", "fpv", "bottom_center", "back_center"]
 
-# set camera parameters
-cameraType = "scene"
-if cameraType not in cameraTypeMap:
-    sys.exit(1)
-else:
-    print(cameraTypeMap[cameraType])
 
-cameraName = "bottom_center"
-if cameraName not in cameraNameMap:
-    sys.exit(1)
-else:
-    print(cameraName)
+def setCameraType(cameraType):
+    if cameraType not in cameraTypeMap:
+        sys.exit(1)
+    else:
+        return cameraType
+
+
+def setCameraName(cameraName):
+    if cameraName not in cameraNameMap:
+        sys.exit(1)
+    else:
+        return cameraName
+
+
+# set/create image folder directory
+def createDirectory(dir):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    return dir
+
 
 # Set Parameters for timestamps
 fontFace = cv2.FONT_HERSHEY_PLAIN
@@ -38,14 +49,9 @@ thickness = 1
 textSize, baseline = cv2.getTextSize("FPS", fontFace, fontScale, thickness)
 textOrg = (10, 10 + textSize[1])
 
-# set/create image folder directory
-directory = "generated-data"
-if not os.path.exists(directory):
-    os.makedirs(directory)
-
 
 # ----------------- FLYING -----------------#
-def captureImages(i):
+def captureImages(directory):
     # capture image
     raw = client.simGetImage(cameraName, cameraTypeMap[cameraType])
     drone_position = client.simGetVehiclePose().position
@@ -54,7 +60,6 @@ def captureImages(i):
     y_val = "{:.2f}".format(t.y_val)
     z_val = "{:.2f}".format(t.z_val)
     str_position = 'x:' + x_val + ' ' + 'y: ' + y_val + ' ' + 'z:' + z_val
-    # print(str_position)
     if raw is None:
         print("Camera is not returning image, please check airsim for error messages")
         sys.exit(0)
@@ -62,44 +67,87 @@ def captureImages(i):
         png = cv2.imdecode(airsim.string_to_uint8_array(raw), cv2.IMREAD_UNCHANGED)
         img_name = str_position
         cv2.putText(png, img_name, textOrg, fontFace, fontScale, (0, 255, 255), thickness)
-        file_name = 'Frame ' + str(i) + '.png'
+        file_name = 'Frame' + datetime.datetime.now().time().strftime("%M-%S") + '.png'
         cv2.imwrite(os.path.join(directory, file_name), png)
 
 
-def performCycle(velocity):
+def performCycle(velocity, directory):
     for i in range(10):
         # move forward
-        client.moveByVelocityAsync(velocity, 0, 0, 1).join()
-        captureImages(i)
+        client.moveByVelocityAsync(velocity, 0, 0, 2).join()
+        captureImages(directory)
 
-    for i in range(10, 17):
-        # move left
-        client.moveByVelocityAsync(0, velocity, 0, 1).join()
-        captureImages(i)
-
-    for i in range(17, 25):
-        # move left
-        client.moveByVelocityAsync(-velocity, 0, 0, 1).join()
-        captureImages(i)
-
-    for i in range(25, 31):
+    for j in range(3):
         # move left
         client.moveByVelocityAsync(0, -velocity, 0, 1).join()
-        captureImages(i)
+        captureImages(directory)
+
+    for i in range(10):
+        # move forward
+        client.moveByVelocityAsync(-velocity, 0, 0, 2).join()
+        captureImages(directory)
+
+    for j in range(4):
+        # move left
+        client.moveByVelocityAsync(0, -velocity, 0, 1).join()
+        captureImages(directory)
+
+
+def performFullPatrol(velocity, directory):
+    for i in range(3):
+        performCycle(velocity, directory)
+
+
+def resetPosition():
+    client.landAsync().join()
+    client.reset()
+    client.enableApiControl(False)
+    client.enableApiControl(True)
+    client.takeoffAsync().join()
+
+
+def setSegmentationSettings():
+    # Grass
+    client.simSetSegmentationObjectID("Grass_Floor", 9, True)
+    # Landscape
+    client.simSetSegmentationObjectID("Landscape_1", 9, True)
+    # Bushes
+    client.simSetSegmentationObjectID("SM_Bush[\w]*", 4, True)
+    # Connectors pipes
+    client.simSetSegmentationObjectID("Connector[\w]*", 16, True)
+    # T-Connectors pipes
+    client.simSetSegmentationObjectID("T_connector[\w]*", 16, True)
+    # Straight pipes
+    client.simSetSegmentationObjectID("Pipe[\w]*", 16, True)
+    # Bases
+    client.simSetSegmentationObjectID("Base[\w]*", 16, True)
+    # Unions
+    client.simSetSegmentationObjectID("Union[\w]*", 16, True)
 
 
 # connect to the AirSim simulator using Tornado
 client = airsim.MultirotorClient()
 client.confirmConnection()
 client.enableApiControl(True)
+initial_position = client.simGetVehiclePose().position
 
 # take off
 client.takeoffAsync().join()
-for i in range(3):
-    client.moveByVelocityAsync(0, 7, 0, 1).join()
 # Fly
+cameraName = setCameraName("bottom_center")
+
+# RGB images
+cameraType = setCameraType("scene")
+rgb_dir = createDirectory("generated-data/RGB")
 velocity = 10
-performCycle(velocity)
+performFullPatrol(velocity, rgb_dir)
+resetPosition()
+
+# Segmentation map images
+cameraType = setCameraType("segmentation")
+seg_dir = createDirectory("generated-data/SEG")
+setSegmentationSettings()
+performFullPatrol(velocity, seg_dir)
 
 # Land Drone
 client.landAsync().join()
