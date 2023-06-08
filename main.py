@@ -113,6 +113,10 @@ def setSegmentationSettings():
     client.simSetSegmentationObjectID("Landscape_1", 9, True)
     # Bushes
     client.simSetSegmentationObjectID("SM_Bush[\w]*", 4, True)
+    # Bended Pipelines
+    client.simSetSegmentationObjectID("bended[\w]*", 16, True)
+    # Bended Pipelines
+    client.simSetSegmentationObjectID("bended[\w]_[\w]*", 16, True)
     # Connectors pipes
     client.simSetSegmentationObjectID("Connector[\w]*", 16, True)
     # T-Connectors pipes
